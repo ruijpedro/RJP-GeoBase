@@ -1,0 +1,48 @@
+name: Validate and build offline GeoBase
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Data package version
+        required: true
+        default: '0.1.0'
+  push:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/build.yml'
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest -q
+      - name: Check source availability
+        id: source
+        shell: bash
+        run: |
+          if [ -f inputs/rail.zip ] && [ -f inputs/roads.zip ] && [ -f inputs/stations.zip ]; then
+            echo 'present=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'present=false' >> "$GITHUB_OUTPUT"
+            echo 'No authorized input files uploaded. Running unit tests only.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Build validated offline maps
+        if: steps.source.outputs.present == 'true'
+        run: python scripts/build.py --sources inputs --output dist --version "${{ github.event.inputs.version || '0.1.0' }}"
+      - name: Publish workflow artifacts
+        if: steps.source.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: geobase-offline-${{ github.run_number }}
+          path: dist/
+          retention-days: 30

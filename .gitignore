@@ -1,0 +1,6 @@
+inputs/
+dist/
+*.gpkg
+__pycache__/
+.pytest_cache/
+.venv/
